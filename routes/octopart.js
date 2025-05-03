@@ -1,3 +1,5 @@
+// routes/octopart.js
+
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
@@ -71,7 +73,6 @@ async function searchOctopart(mpn) {
   if (!part) return null;
 
   const voltageSpec = part.specs?.find(s => /voltage/i.test(s.attribute.name));
-
   const priceInfo = part.sellers?.find(s => s.isAuthorized)?.offers?.[0] || {};
 
   return {
@@ -89,7 +90,8 @@ async function searchOctopart(mpn) {
   };
 }
 
-router.get('/octopart/search', async (req, res) => {
+// ✅ Только /search (без /octopart)
+router.get('/search', async (req, res) => {
   const mpn = req.query.part;
   if (!mpn) return res.status(400).json({ error: 'Missing part parameter' });
 

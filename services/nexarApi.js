@@ -1,9 +1,10 @@
 const axios = require('axios');
 
 let token = null;
+let expiry = null;
 
 async function getAccessToken() {
-  if (token) return token;
+  if (token && expiry && Date.now() < expiry) return token;
 
   const res = await axios.post('https://identity.nexar.com/connect/token', new URLSearchParams({
     grant_type: 'client_credentials',
@@ -12,6 +13,8 @@ async function getAccessToken() {
   }));
 
   token = res.data.access_token;
+  expiry = Date.now() + res.data.expires_in * 1000 - 5000;
+
   return token;
 }
 
@@ -25,15 +28,18 @@ async function searchPart(mpn) {
           part {
             mpn
             manufacturer { name }
+            package
             shortDescription
             bestDatasheet { url }
+            specs {
+              attribute { name }
+              displayValue
+            }
             sellers {
+              isAuthorized
               company { name }
               offers {
-                clickUrl
                 inventoryLevel
-                moq
-                sku
                 prices { price quantity }
               }
             }
@@ -47,7 +53,24 @@ async function searchPart(mpn) {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
 
-  return res.data;
+  const part = res.data.data?.supSearch?.results?.[0]?.part;
+  if (!part) return null;
+
+  const voltage = part.specs?.find(s => /voltage/i.test(s.attribute.name))?.displayValue ?? null;
+  const authorizedSeller = part.sellers?.find(s => s.isAuthorized);
+  const price = authorizedSeller?.offers?.[0]?.prices?.[0];
+
+  return {
+    manufacturer: part.manufacturer?.name ?? null,
+    mpn: part.mpn ?? null,
+    package: part.package ?? null,
+    voltage,
+    description: part.shortDescription ?? null,
+    datasheet: part.bestDatasheet?.url ?? null,
+    unitPrice: price?.price ?? null,
+    extPrice: price?.quantity ? price.quantity * price.price : null,
+    inStock: authorizedSeller?.offers?.[0]?.inventoryLevel ?? null
+  };
 }
 
 module.exports = { searchPart };
